@@ -20,6 +20,39 @@
   --color-coral: #f2706d;
 }
 
+/* ---------- thème clair : surcharge des variables Tailwind v4 ---------- */
+html.light {
+  --color-abyss: #eef4f6;
+  --color-ink: #ffffff;
+  --color-panel: #ffffff;
+  --color-panel2: #e4edf0;
+  --color-edge: #cfdee4;
+  --color-edge2: #a9c2cc;
+  --color-fg: #0e212a;
+  --color-mut: #48636e;
+  --color-dim: #7d98a3;
+  --color-signal: #0a9c68;
+  --color-radarc: #0a7fad;
+  --color-amberx: #b07c0d;
+  --color-coral: #cf453f;
+  color-scheme: light;
+}
+
+html.light .bg-scene::before {
+  background-image:
+    linear-gradient(to right, rgb(14 33 42 / 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(14 33 42 / 0.05) 1px, transparent 1px);
+}
+
+html.light * {
+  scrollbar-color: #b3c8d1 transparent;
+}
+html.light ::-webkit-scrollbar-thumb {
+  background: #b3c8d1;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
 html,
 body {
   margin: 0;

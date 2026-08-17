@@ -7,7 +7,8 @@ export type SourceId =
   | "hellowork"
   | "linkedin"
   | "remotive"
-  | "arbeitnow";
+  | "arbeitnow"
+  | "adzuna";
 
 export interface Job {
   id: string;
@@ -32,6 +33,8 @@ export interface SourceMeta {
   id: SourceId;
   name: string;
   kind: "demo" | "api";
+  /** La source exige une clé API saisie par l'utilisateur. */
+  needsKey?: boolean;
 }
 
 export type SourceStatus = "online" | "scanning" | "offline" | "pending";
@@ -48,7 +51,9 @@ export interface Filters {
 }
 
 export type SortId = "recent" | "salary_desc" | "salary_asc" | "match";
-export type TabId = "all" | "new" | "saved";
+export type TabId = "all" | "new" | "saved" | "applications";
+
+export type ThemeId = "dark" | "light";
 
 export interface Prefs {
   autoOn: boolean;
@@ -56,6 +61,24 @@ export interface Prefs {
   notifOn: boolean;
   dense: boolean;
   sort: SortId;
+  theme: ThemeId;
+}
+
+/** Suivi de candidature : statuts du pipeline (roadmap). */
+export type ApplicationStatus = "postule" | "entretien" | "refus";
+
+export interface Application {
+  jobId: string;
+  status: ApplicationStatus;
+  /** Date de dernière mise à jour du statut (ms). */
+  updatedAt: number;
+  note?: string;
+}
+
+/** Clés API saisies par l'utilisateur (stockées localement). */
+export interface ApiKeys {
+  adzunaAppId: string;
+  adzunaAppKey: string;
 }
 
 export interface ToastMsg {

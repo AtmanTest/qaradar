@@ -1,0 +1,30 @@
+{
+  "name": "Radar QA — Veille d'offres QA Engineer",
+  "short_name": "Radar QA",
+  "description": "Veille automatique multi-sources des offres QA Engineer / testeur logiciel — Paris & Île-de-France. Scoring profil, alertes, suivi de candidatures.",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#071015",
+  "theme_color": "#071015",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

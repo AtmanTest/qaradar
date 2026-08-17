@@ -1,5 +1,11 @@
 import { useState, type CSSProperties, type ReactNode } from "react";
-import type { Filters as FiltersState, SourceId, SourceMeta, SourceStatus } from "../types";
+import type {
+  ApiKeys,
+  Filters as FiltersState,
+  SourceId,
+  SourceMeta,
+  SourceStatus,
+} from "../types";
 import {
   CONTRACTS,
   LOCATION_FILTERS,
@@ -8,7 +14,7 @@ import {
   TAGS,
   WORKMODES,
 } from "../data/jobs";
-import { IconChevronDown, IconDownload, IconFile, IconSearch, IconSliders, IconX, IconPlus } from "./icons";
+import { IconChevronDown, IconDownload, IconFile, IconKey, IconRss, IconSearch, IconSliders, IconX, IconPlus } from "./icons";
 
 interface FiltersProps {
   filters: FiltersState;
@@ -20,8 +26,11 @@ interface FiltersProps {
   alerts: string[];
   onAddAlert: (w: string) => void;
   onRemoveAlert: (w: string) => void;
+  apiKeys: ApiKeys;
+  onApiKeys: (k: ApiKeys) => void;
   onExportCsv: () => void;
   onExportJson: () => void;
+  onExportRss: () => void;
   shown: number;
   totalActive: number;
 }
@@ -81,8 +90,11 @@ export default function Filters({
   alerts,
   onAddAlert,
   onRemoveAlert,
+  apiKeys,
+  onApiKeys,
   onExportCsv,
   onExportJson,
+  onExportRss,
   shown,
   totalActive,
 }: FiltersProps) {
@@ -258,7 +270,9 @@ export default function Filters({
                   <span className={`h-2 w-2 shrink-0 rounded-full ${dotClass(status[s.id], enabled)}`} />
                   <span className={`flex-1 truncate text-xs ${enabled ? "text-fg" : "text-dim"}`}>{s.name}</span>
                   <span className="font-mono text-[10px] text-dim">{counts[s.id] ?? 0}</span>
-                  {s.kind === "api" ? (
+                  {s.needsKey && !(apiKeys.adzunaAppId && apiKeys.adzunaAppKey) ? (
+                    <span className="rounded border border-amberx/40 bg-amberx/10 px-1 font-mono text-[9px] text-amberx">clé requise</span>
+                  ) : s.kind === "api" ? (
                     <span className="rounded border border-radarc/30 bg-radarc/10 px-1 font-mono text-[9px] text-radarc">API</span>
                   ) : (
                     <span className="rounded border border-edge bg-ink/60 px-1 font-mono text-[9px] text-dim">flux</span>
@@ -268,6 +282,47 @@ export default function Filters({
             );
           })}
         </ul>
+      </Section>
+
+      <Section title="API Adzuna · clé gratuite">
+        <div className="space-y-1.5">
+          <label className="flex items-center gap-1.5 rounded-md border border-edge bg-ink px-2 py-1.5 focus-within:border-radarc/50">
+            <IconKey size={12} className="shrink-0 text-dim" />
+            <input
+              value={apiKeys.adzunaAppId}
+              onChange={(e) => onApiKeys({ ...apiKeys, adzunaAppId: e.target.value.trim() })}
+              placeholder="app_id"
+              autoComplete="off"
+              spellCheck={false}
+              aria-label="Identifiant application Adzuna (app_id)"
+              className="w-full bg-transparent font-mono text-[11px] text-fg placeholder:text-dim focus:outline-none"
+            />
+          </label>
+          <label className="flex items-center gap-1.5 rounded-md border border-edge bg-ink px-2 py-1.5 focus-within:border-radarc/50">
+            <IconKey size={12} className="shrink-0 text-dim" />
+            <input
+              value={apiKeys.adzunaAppKey}
+              onChange={(e) => onApiKeys({ ...apiKeys, adzunaAppKey: e.target.value.trim() })}
+              placeholder="app_key"
+              type="password"
+              autoComplete="off"
+              aria-label="Clé API Adzuna (app_key)"
+              className="w-full bg-transparent font-mono text-[11px] text-fg placeholder:text-dim focus:outline-none"
+            />
+          </label>
+        </div>
+        <p className="mt-2 text-[10px] leading-snug text-dim">
+          Identifiants gratuits sur{" "}
+          <a
+            href="https://developer.adzuna.com"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="text-radarc hover:underline"
+          >
+            developer.adzuna.com
+          </a>{" "}
+          — stockés uniquement dans votre navigateur, offres France réelles à chaque scan.
+        </p>
       </Section>
 
       <Section title="Alertes mots-clés">
@@ -321,7 +376,7 @@ export default function Filters({
           <IconSliders size={14} />
           Réinitialiser les filtres
         </button>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <button
             onClick={onExportCsv}
             className="flex h-9 items-center justify-center gap-1.5 rounded-md border border-edge text-xs font-medium text-mut transition-all hover:border-radarc/60 hover:text-radarc active:scale-[0.98]"
@@ -335,6 +390,14 @@ export default function Filters({
           >
             <IconFile size={13} />
             JSON
+          </button>
+          <button
+            onClick={onExportRss}
+            title="Flux RSS 2.0 de la vue courante"
+            className="flex h-9 items-center justify-center gap-1.5 rounded-md border border-edge text-xs font-medium text-mut transition-all hover:border-radarc/60 hover:text-radarc active:scale-[0.98]"
+          >
+            <IconRss size={13} />
+            RSS
           </button>
         </div>
         <p className="text-center font-mono text-[10px] text-dim">

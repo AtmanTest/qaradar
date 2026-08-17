@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
+  ApiKeys,
+  Application,
+  ApplicationStatus,
   Filters as FiltersState,
   Job,
   Prefs,
@@ -10,13 +13,14 @@ import type {
   ToastMsg,
 } from "./types";
 import { locationMatches, matchScore, RESERVE_POOL, SEED_JOBS, SOURCES } from "./data/jobs";
-import { fetchArbeitnow, fetchRemotive } from "./lib/api";
+import { fetchAdzuna, fetchArbeitnow, fetchRemotive } from "./lib/api";
 import {
   annualized,
   clockTime,
   delay,
   download,
   jobsToCsv,
+  jobsToRss,
   loadJSON,
   saveJSON,
 } from "./lib/utils";
@@ -25,6 +29,7 @@ import StatsBar from "./components/StatsBar";
 import Filters from "./components/Filters";
 import JobCard from "./components/JobCard";
 import JobDrawer from "./components/JobDrawer";
+import Applications from "./components/Applications";
 import Toasts from "./components/Toasts";
 import { IconCheck, IconInbox, IconLayers, IconRefresh } from "./components/icons";
 
@@ -36,6 +41,8 @@ const LS = {
   filters: "radarqa:filters",
   alerts: "radarqa:alerts",
   prefs: "radarqa:prefs",
+  applications: "radarqa:applications",
+  apiKeys: "radarqa:apikeys",
 };
 
 const ALL_SOURCES = SOURCES.map((s) => s.id);
@@ -57,7 +64,10 @@ const DEFAULT_PREFS: Prefs = {
   notifOn: false,
   dense: false,
   sort: "recent",
+  theme: "dark",
 };
+
+const DEFAULT_KEYS: ApiKeys = { adzunaAppId: "", adzunaAppKey: "" };
 
 const INITIAL_STATUS = Object.fromEntries(
   SOURCES.map((s) => [s.id, s.kind === "api" ? "pending" : "scanning"])
@@ -78,7 +88,14 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "all", label: "Toutes" },
   { id: "new", label: "Nouvelles" },
   { id: "saved", label: "Sauvegardées" },
+  { id: "applications", label: "Candidatures" },
 ];
+
+/** Événement PWA `beforeinstallprompt` (absent des types DOM standard). */
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+}
 
 export default function App() {
   const [jobs, setJobs] = useState<Job[]>(initialJobs);
@@ -98,6 +115,13 @@ export default function App() {
     ...DEFAULT_PREFS,
     ...loadJSON<Partial<Prefs>>(LS.prefs, {}),
   }));
+  const [applications, setApplications] = useState<Record<string, Application>>(() =>
+    loadJSON(LS.applications, {} as Record<string, Application>)
+  );
+  const [apiKeys, setApiKeys] = useState<ApiKeys>(() => ({
+    ...DEFAULT_KEYS,
+    ...loadJSON<Partial<ApiKeys>>(LS.apiKeys, {}),
+  }));
   const [tab, setTab] = useState<TabId>("all");
   const [scanning, setScanning] = useState(false);
   const [lastScan, setLastScan] = useState<number | null>(null);
@@ -107,6 +131,7 @@ export default function App() {
   const [status, setStatus] = useState<Record<SourceId, SourceStatus>>(INITIAL_STATUS);
   const [toasts, setToasts] = useState<ToastMsg[]>([]);
   const [openJob, setOpenJob] = useState<Job | null>(null);
+  const [installEvt, setInstallEvt] = useState<BeforeInstallPromptEvent | null>(null);
 
   const scanningRef = useRef(false);
   const bootedRef = useRef(false);
@@ -117,11 +142,28 @@ export default function App() {
   const hiddenRef = useRef(hiddenIds);
   const prefsRef = useRef(prefs);
   const jobsRef = useRef(jobs);
+  const keysRef = useRef(apiKeys);
 
   useEffect(() => { knownRef.current = knownIds; }, [knownIds]);
   useEffect(() => { hiddenRef.current = hiddenIds; }, [hiddenIds]);
   useEffect(() => { prefsRef.current = prefs; }, [prefs]);
   useEffect(() => { jobsRef.current = jobs; }, [jobs]);
+  useEffect(() => { keysRef.current = apiKeys; }, [apiKeys]);
+
+  // thème sombre / clair
+  useEffect(() => {
+    document.documentElement.classList.toggle("light", prefs.theme === "light");
+  }, [prefs.theme]);
+
+  // installation PWA : capture de l'événement différé
+  useEffect(() => {
+    const h = (e: Event) => {
+      e.preventDefault();
+      setInstallEvt(e as BeforeInstallPromptEvent);
+    };
+    window.addEventListener("beforeinstallprompt", h);
+    return () => window.removeEventListener("beforeinstallprompt", h);
+  }, []);
 
   const pushToast = useCallback((kind: ToastMsg["kind"], text: string) => {
     const id = ++toastSeq.current;
@@ -145,7 +187,7 @@ export default function App() {
   }, []);
 
   /* ------------------------------------------------------------------ */
-  /* Moteur de scan : flux nationaux simulés + APIs live (Remotive, AN)  */
+  /* Moteur de scan : flux nationaux simulés + APIs live                  */
   /* ------------------------------------------------------------------ */
   const runScan = useCallback(
     async (initial = false) => {
@@ -178,10 +220,26 @@ export default function App() {
       }
 
       // 2) APIs publiques interrogées en direct depuis le navigateur
-      const [rm, an] = await Promise.allSettled([fetchRemotive(), fetchArbeitnow()]);
+      const keys = keysRef.current;
+      const adzunaReady = Boolean(keys.adzunaAppId && keys.adzunaAppKey);
+      const calls: [SourceId, Promise<Job[]>][] = [
+        ["remotive", fetchRemotive()],
+        ["arbeitnow", fetchArbeitnow()],
+      ];
+      if (adzunaReady) calls.push(["adzuna", fetchAdzuna(keys.adzunaAppId, keys.adzunaAppKey)]);
+      const settled = await Promise.allSettled(calls.map(([, p]) => p));
       const apiJobs: Job[] = [];
-      if (rm.status === "fulfilled") apiJobs.push(...rm.value);
-      if (an.status === "fulfilled") apiJobs.push(...an.value);
+      const apiStatus: Partial<Record<SourceId, SourceStatus>> = {};
+      calls.forEach(([id], i) => {
+        const r = settled[i];
+        if (r.status === "fulfilled") {
+          apiJobs.push(...r.value);
+          apiStatus[id] = "online";
+        } else {
+          apiStatus[id] = "offline";
+        }
+      });
+      if (!adzunaReady) apiStatus.adzuna = "pending";
 
       setStatus((s) => ({
         ...s,
@@ -190,8 +248,7 @@ export default function App() {
         francetravail: "online",
         hellowork: "online",
         linkedin: "online",
-        remotive: rm.status === "fulfilled" ? "online" : "offline",
-        arbeitnow: an.status === "fulfilled" ? "online" : "offline",
+        ...apiStatus,
       }));
 
       const known = new Set(knownRef.current);
@@ -279,6 +336,8 @@ export default function App() {
   useEffect(() => { saveJSON(LS.filters, filters); }, [filters]);
   useEffect(() => { saveJSON(LS.alerts, alerts); }, [alerts]);
   useEffect(() => { saveJSON(LS.prefs, prefs); }, [prefs]);
+  useEffect(() => { saveJSON(LS.applications, applications); }, [applications]);
+  useEffect(() => { saveJSON(LS.apiKeys, apiKeys); }, [apiKeys]);
 
   // raccourcis clavier
   useEffect(() => {
@@ -289,6 +348,10 @@ export default function App() {
         document.getElementById("job-search")?.focus();
       }
       if (e.key === "Escape") setOpenJob(null);
+      if (e.key >= "1" && e.key <= "4" && tag !== "input" && tag !== "textarea" && tag !== "select") {
+        const t = TABS[Number(e.key) - 1];
+        if (t) setTab(t.id);
+      }
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
@@ -300,6 +363,12 @@ export default function App() {
     () => jobs.filter((j) => !hiddenIds.includes(j.id)),
     [jobs, hiddenIds]
   );
+
+  const jobsById = useMemo(() => {
+    const m = new Map<string, Job>();
+    for (const j of jobs) m.set(j.id, j);
+    return m;
+  }, [jobs]);
 
   const matchMap = useMemo(() => {
     const m = new Map<string, number>();
@@ -361,6 +430,10 @@ export default function App() {
     () => filtered.filter((j) => savedIds.includes(j.id)),
     [filtered, savedIds]
   );
+  const applicationCount = useMemo(
+    () => Object.values(applications).filter((a) => jobsById.has(a.jobId)).length,
+    [applications, jobsById]
+  );
 
   const tabVisible = tab === "new" ? newInFiltered : tab === "saved" ? savedInFiltered : filtered;
 
@@ -372,6 +445,7 @@ export default function App() {
       highMatch: activeJobs.filter((j) => (matchMap.get(j.id) ?? 0) >= 80).length,
       online: SOURCES.filter((s) => status[s.id] === "online").length,
     };
+    // lastScan/scans : recalcule les compteurs temporels après chaque scan
   }, [activeJobs, matchMap, status, lastScan, scans]);
 
   const activeIdSet = useMemo(() => new Set(activeJobs.map((j) => j.id)), [activeJobs]);
@@ -426,6 +500,17 @@ export default function App() {
     setPrefs((p) => ({ ...p, notifOn: next }));
   };
 
+  const toggleTheme = () => {
+    const next = prefsRef.current.theme === "dark" ? "light" : "dark";
+    setPrefs((p) => ({ ...p, theme: next }));
+    pushToast("info", next === "light" ? "Thème clair activé" : "Thème sombre activé");
+  };
+
+  const installApp = () => {
+    if (!installEvt) return;
+    void installEvt.prompt().then(() => setInstallEvt(null));
+  };
+
   const openOffer = (j: Job) => {
     setOpenJob(j);
     setReadIds((prev) => (prev.includes(j.id) ? prev : [...prev, j.id]));
@@ -443,6 +528,39 @@ export default function App() {
     pushToast("info", "Offre masquée du flux");
   };
 
+  /* ---------- suivi des candidatures ---------- */
+
+  const markApplied = (jobId: string) => {
+    setApplications((prev) =>
+      prev[jobId]
+        ? prev
+        : { ...prev, [jobId]: { jobId, status: "postule", updatedAt: Date.now() } }
+    );
+    if (!savedIds.includes(jobId)) setSavedIds((prev) => [...prev, jobId]);
+    pushToast("success", "Candidature ajoutée au pipeline — statut « Postulé »");
+  };
+
+  const setAppStatus = (jobId: string, status: ApplicationStatus) => {
+    setApplications((prev) =>
+      prev[jobId] ? { ...prev, [jobId]: { ...prev[jobId], status, updatedAt: Date.now() } } : prev
+    );
+  };
+
+  const setAppNote = (jobId: string, note: string) => {
+    setApplications((prev) =>
+      prev[jobId] ? { ...prev, [jobId]: { ...prev[jobId], note } } : prev
+    );
+  };
+
+  const removeApplication = (jobId: string) => {
+    setApplications((prev) => {
+      const next = { ...prev };
+      delete next[jobId];
+      return next;
+    });
+    pushToast("info", "Candidature retirée du suivi");
+  };
+
   const resetFilters = () => {
     setFilters(DEFAULT_FILTERS);
     pushToast("info", "Filtres réinitialisés");
@@ -453,18 +571,26 @@ export default function App() {
     pushToast("alert", `Alerte « ${w} » activée sur les nouvelles offres`);
   };
 
+  const stamp = new Date().toISOString().slice(0, 10);
+
   const exportCsv = () => {
-    download(`radar-qa-${new Date().toISOString().slice(0, 10)}.csv`, jobsToCsv(tabVisible), "text/csv");
+    download(`radar-qa-${stamp}.csv`, jobsToCsv(tabVisible), "text/csv");
     pushToast("info", `Export CSV — ${tabVisible.length} offre${tabVisible.length > 1 ? "s" : ""}`);
   };
 
   const exportJson = () => {
     download(
-      `radar-qa-${new Date().toISOString().slice(0, 10)}.json`,
+      `radar-qa-${stamp}.json`,
       JSON.stringify(tabVisible, null, 2),
       "application/json"
     );
     pushToast("info", `Export JSON — ${tabVisible.length} offre${tabVisible.length > 1 ? "s" : ""}`);
+  };
+
+  const exportRss = () => {
+    const name = (id: SourceId) => SOURCES.find((s) => s.id === id)?.name ?? id;
+    download(`radar-qa-${stamp}.xml`, jobsToRss(tabVisible, name), "application/rss+xml");
+    pushToast("info", `Flux RSS exporté — ${tabVisible.length} offre${tabVisible.length > 1 ? "s" : ""}`);
   };
 
   /* ----------------------------- rendu ------------------------------- */
@@ -481,6 +607,8 @@ export default function App() {
         intervalSec={prefs.intervalSec}
         newCount={bellCount}
         notifOn={prefs.notifOn}
+        theme={prefs.theme}
+        canInstall={installEvt !== null}
         onToggleAuto={toggleAuto}
         onIntervalChange={changeInterval}
         onScanNow={() => void runScan(false)}
@@ -489,6 +617,8 @@ export default function App() {
           window.scrollTo({ top: 0, behavior: "smooth" });
         }}
         onToggleNotif={toggleNotif}
+        onToggleTheme={toggleTheme}
+        onInstall={installApp}
       />
 
       <main className="mx-auto max-w-[1480px] space-y-5 px-4 py-5 sm:px-6">
@@ -501,6 +631,7 @@ export default function App() {
           scans={scans}
           blips={Math.min(6, stats.new24)}
           scanning={scanning}
+          applications={applicationCount}
         />
 
         <div className="flex flex-col gap-5 lg:flex-row">
@@ -516,8 +647,11 @@ export default function App() {
                 alerts={alerts}
                 onAddAlert={addAlert}
                 onRemoveAlert={(w) => setAlerts((prev) => prev.filter((a) => a !== w))}
+                apiKeys={apiKeys}
+                onApiKeys={setApiKeys}
                 onExportCsv={exportCsv}
                 onExportJson={exportJson}
+                onExportRss={exportRss}
                 shown={tabVisible.length}
                 totalActive={activeJobs.length}
               />
@@ -527,14 +661,22 @@ export default function App() {
           <section className="min-w-0 flex-1">
             {/* barre d'onglets + tri */}
             <div className="mb-3 flex flex-wrap items-center gap-2">
-              <div className="flex rounded-md border border-edge bg-panel p-0.5">
+              <div className="flex rounded-md border border-edge bg-panel p-0.5" role="tablist">
                 {TABS.map((t) => {
                   const count =
-                    t.id === "all" ? filtered.length : t.id === "new" ? newInFiltered.length : savedInFiltered.length;
+                    t.id === "all"
+                      ? filtered.length
+                      : t.id === "new"
+                      ? newInFiltered.length
+                      : t.id === "saved"
+                      ? savedInFiltered.length
+                      : applicationCount;
                   const active = tab === t.id;
                   return (
                     <button
                       key={t.id}
+                      role="tab"
+                      aria-selected={active}
                       onClick={() => setTab(t.id)}
                       className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium transition-all ${
                         active ? "bg-signal/15 text-signal" : "text-mut hover:text-fg"
@@ -562,6 +704,7 @@ export default function App() {
                 <button
                   onClick={() => setPrefs((p) => ({ ...p, dense: !p.dense }))}
                   aria-label={prefs.dense ? "Vue confortable" : "Vue compacte"}
+                  aria-pressed={prefs.dense}
                   title={prefs.dense ? "Vue confortable" : "Vue compacte"}
                   className={`grid h-8 w-8 place-items-center rounded-md border transition-all active:scale-95 ${
                     prefs.dense
@@ -602,10 +745,16 @@ export default function App() {
             {/* ligne de contexte */}
             <div className="mb-3 flex items-center gap-2 font-mono text-[10.5px] text-dim">
               <span className="text-signal">▸</span>
-              {tabVisible.length} offre{tabVisible.length > 1 ? "s" : ""}
-              {filters.query.trim() && <> pour « {filters.query.trim()} »</>}
-              <span className="mx-1 text-edge2">|</span>
-              tri : {prefs.sort === "recent" ? "plus récentes" : prefs.sort === "match" ? "match profil" : "salaire"}
+              {tab === "applications" ? (
+                <>{applicationCount} candidature{applicationCount > 1 ? "s" : ""} suivie{applicationCount > 1 ? "s" : ""}</>
+              ) : (
+                <>
+                  {tabVisible.length} offre{tabVisible.length > 1 ? "s" : ""}
+                  {filters.query.trim() && <> pour « {filters.query.trim()} »</>}
+                  <span className="mx-1 text-edge2">|</span>
+                  tri : {prefs.sort === "recent" ? "plus récentes" : prefs.sort === "match" ? "match profil" : "salaire"}
+                </>
+              )}
               {scanning && (
                 <span className="ml-auto flex items-center gap-1.5 text-radarc">
                   <span className="blink">●</span> rapatriement en cours…
@@ -613,7 +762,16 @@ export default function App() {
               )}
             </div>
 
-            {tabVisible.length === 0 ? (
+            {tab === "applications" ? (
+              <Applications
+                applications={applications}
+                jobsById={jobsById}
+                onOpen={openOffer}
+                onSetStatus={setAppStatus}
+                onSetNote={setAppNote}
+                onRemove={removeApplication}
+              />
+            ) : tabVisible.length === 0 ? (
               <div className="anim-rise flex flex-col items-center rounded-lg border border-dashed border-edge bg-panel/50 px-6 py-16 text-center">
                 <IconInbox size={34} className="text-edge2" />
                 <div className="mt-4 font-display text-lg font-semibold text-fg">
@@ -658,6 +816,7 @@ export default function App() {
                     saved={savedIds.includes(j.id)}
                     read={readIds.includes(j.id)}
                     dense={prefs.dense}
+                    application={applications[j.id]?.status}
                     onOpen={() => openOffer(j)}
                     onSave={() => toggleSave(j.id)}
                     onHide={() => hideJob(j.id)}
@@ -690,13 +849,14 @@ export default function App() {
           ))}
           <span className="ml-auto font-mono text-[10px] text-dim">
             {lastScan ? `dernier scan ${clockTime(lastScan)}` : "scan initial…"} · données stockées
-            localement · v1.0
+            localement · v2.0
           </span>
         </div>
         <p className="mt-3 text-center text-[11px] leading-relaxed text-dim">
           Flux nationaux (France Travail, Indeed, WTTJ, HelloWork, LinkedIn) alimentés par un
-          référentiel réaliste côté navigateur — ces API exigent un accès serveur. Remotive et
-          Arbeitnow sont interrogés en direct depuis votre navigateur à chaque scan.
+          référentiel réaliste côté navigateur — ces API exigent un accès serveur. Remotive,
+          Arbeitnow et Adzuna (avec votre clé) sont interrogés en direct depuis votre navigateur
+          à chaque scan.
         </p>
       </footer>
 
@@ -709,9 +869,12 @@ export default function App() {
         sourceName={
           openJob ? SOURCES.find((s) => s.id === openJob.source)?.name ?? openJob.source : ""
         }
+        application={openJob ? applications[openJob.id] : undefined}
         onClose={() => setOpenJob(null)}
         onSave={() => openJob && toggleSave(openJob.id)}
         onHide={() => openJob && hideJob(openJob.id)}
+        onApply={() => openJob && markApplied(openJob.id)}
+        onAppStatus={(s) => openJob && setAppStatus(openJob.id, s)}
       />
 
       <Toasts toasts={toasts} onDismiss={(id) => setToasts((t) => t.filter((x) => x.id !== id))} />

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { IconBriefcase, IconLayers, IconTarget, IconZap } from "./icons";
+import { IconBriefcase, IconLayers, IconSend, IconTarget, IconZap } from "./icons";
 
 interface StatsBarProps {
   total: number;
@@ -10,6 +10,7 @@ interface StatsBarProps {
   scans: number;
   blips: number;
   scanning: boolean;
+  applications: number;
 }
 
 const BLIPS = [
@@ -58,9 +59,10 @@ export default function StatsBar({
   scans,
   blips,
   scanning,
+  applications,
 }: StatsBarProps) {
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
       <Tile
         label="Offres en veille"
         value={String(total)}
@@ -89,6 +91,14 @@ export default function StatsBar({
         sub="API live + flux nationaux"
         accent="var(--color-coral)"
         icon={<IconBriefcase size={18} />}
+      />
+      <Tile
+        label="Candidatures"
+        value={String(applications)}
+        sub="pipeline postulé · entretien"
+        accent="var(--color-radarc)"
+        icon={<IconSend size={18} />}
+        valueClass={applications > 0 ? "text-radarc" : undefined}
       />
       <div className="col-span-2 flex items-center gap-4 rounded-lg border border-edge bg-panel/80 p-4 lg:col-span-1">
         <div className="relative h-[84px] w-[84px] shrink-0">

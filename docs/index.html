@@ -12,19 +12,37 @@
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='11' fill='%23071015'/%3E%3Ccircle cx='12' cy='12' r='9' fill='none' stroke='%233fe0a5' stroke-width='1.4'/%3E%3Ccircle cx='12' cy='12' r='5' fill='none' stroke='%233fe0a5' stroke-width='1.1' opacity='.55'/%3E%3Cpath d='M12 12 L12 3 A9 9 0 0 1 19.8 7.5 Z' fill='%233fe0a5' opacity='.75'/%3E%3Ccircle cx='15.2' cy='8.6' r='1.5' fill='%233fe0a5'/%3E%3C/svg%3E"
     />
+    <meta name="theme-color" content="#071015" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Radar QA" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="./icons/icon-192.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap"
       rel="stylesheet"
     />
+    <script>
+      // applique le thème persisté avant le premier rendu (évite le flash)
+      try {
+        var prefs = JSON.parse(localStorage.getItem("radarqa:prefs") || "{}");
+        if (prefs.theme === "light") document.documentElement.classList.add("light");
+        if (prefs.theme === "light") document.documentElement.style.background = "#eef4f6";
+      } catch (e) {}
+    </script>
     <style>
       html {
         background: #071015;
       }
+      html.light {
+        background: #eef4f6;
+      }
     </style>
-    <script type="module" crossorigin src="/assets/index-CFXitVzb.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-DXy8r_xu.css">
+    <script type="module" crossorigin src="./assets/index-BkLmHG0s.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-H2SYj8zz.css">
   </head>
   <body>
     <div id="root"></div>

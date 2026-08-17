@@ -1,6 +1,7 @@
-import type { Contract, Job } from "../types";
+import type { ApplicationStatus, Contract, Job } from "../types";
 import { formatPay, hueOf, initialsOf, timeAgo } from "../lib/utils";
-import { IconBookmark, IconExternal, IconEyeOff, IconPin, IconZap } from "./icons";
+import { APP_STATUS_LABEL } from "./Applications";
+import { IconBookmark, IconExternal, IconEyeOff, IconPin, IconSend, IconZap } from "./icons";
 
 const CONTRACT_STYLE: Record<Contract, string> = {
   CDI: "border-signal/40 bg-signal/10 text-signal",
@@ -18,6 +19,7 @@ interface JobCardProps {
   read: boolean;
   dense: boolean;
   index: number;
+  application?: ApplicationStatus;
   onOpen: () => void;
   onSave: () => void;
   onHide: () => void;
@@ -32,6 +34,7 @@ export default function JobCard({
   read,
   dense,
   index,
+  application,
   onOpen,
   onSave,
   onHide,
@@ -91,6 +94,12 @@ export default function JobCard({
             {match >= 60 && (
               <span className="rounded border border-radarc/30 bg-radarc/10 px-1.5 py-0.5 font-mono text-[9.5px] font-medium text-radarc">
                 Match {match}%
+              </span>
+            )}
+            {application && (
+              <span className="flex items-center gap-1 rounded border border-amberx/40 bg-amberx/10 px-1.5 py-0.5 font-mono text-[9.5px] font-bold tracking-wider text-amberx">
+                <IconSend size={10} />
+                {APP_STATUS_LABEL[application].toUpperCase()}
               </span>
             )}
           </div>

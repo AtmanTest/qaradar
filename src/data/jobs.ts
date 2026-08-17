@@ -13,6 +13,7 @@ export const SOURCES: SourceMeta[] = [
   { id: "linkedin", name: "LinkedIn Jobs", kind: "demo" },
   { id: "remotive", name: "Remotive · remote", kind: "api" },
   { id: "arbeitnow", name: "Arbeitnow · remote", kind: "api" },
+  { id: "adzuna", name: "Adzuna · France", kind: "api", needsKey: true },
 ];
 
 export const CONTRACTS: Contract[] = ["CDI", "CDD", "Freelance", "Alternance"];

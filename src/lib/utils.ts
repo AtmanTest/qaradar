@@ -109,6 +109,44 @@ export function jobsToCsv(jobs: Job[]): string {
   return "\uFEFF" + [head.join(";"), ...rows].join("\n");
 }
 
+function xmlEscape(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+/** Flux RSS 2.0 de la vue courante — lisible par n'importe quel lecteur RSS. */
+export function jobsToRss(jobs: Job[], sourceName: (id: Job["source"]) => string): string {
+  const items = jobs
+    .map(
+      (j) => `    <item>
+      <title>${xmlEscape(`${j.title} — ${j.company}`)}</title>
+      <link>${xmlEscape(j.url)}</link>
+      <guid isPermaLink="false">${xmlEscape(j.id)}</guid>
+      <pubDate>${new Date(j.publishedAt).toUTCString()}</pubDate>
+      <category>${xmlEscape(sourceName(j.source))}</category>
+      <description>${xmlEscape(
+        `${j.location} · ${j.contract} · ${formatPay(j)} — ${j.description.slice(0, 280)}`
+      )}</description>
+    </item>`
+    )
+    .join("\n");
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Radar QA — veille offres QA Engineer</title>
+    <link>https://github.com/AtmanTest/qaradar</link>
+    <description>Export RSS de la vue courante (${jobs.length} offres), généré le ${new Date().toUTCString()}</description>
+    <language>fr-FR</language>
+${items}
+  </channel>
+</rss>
+`;
+}
+
 export function download(filename: string, content: string, mime: string): void {
   const blob = new Blob([content], { type: mime + ";charset=utf-8" });
   const url = URL.createObjectURL(blob);

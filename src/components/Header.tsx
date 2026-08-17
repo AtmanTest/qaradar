@@ -1,4 +1,5 @@
-import { IconBell, IconRefresh } from "./icons";
+import { IconBell, IconInstall, IconMoon, IconRefresh, IconSun } from "./icons";
+import type { ThemeId } from "../types";
 import { formatCountdown, timeAgo } from "../lib/utils";
 
 interface HeaderProps {
@@ -9,11 +10,15 @@ interface HeaderProps {
   intervalSec: number;
   newCount: number;
   notifOn: boolean;
+  theme: ThemeId;
+  canInstall: boolean;
   onToggleAuto: () => void;
   onIntervalChange: (sec: number) => void;
   onScanNow: () => void;
   onBell: () => void;
   onToggleNotif: () => void;
+  onToggleTheme: () => void;
+  onInstall: () => void;
 }
 
 const INTERVALS = [
@@ -32,11 +37,15 @@ export default function Header({
   intervalSec,
   newCount,
   notifOn,
+  theme,
+  canInstall,
   onToggleAuto,
   onIntervalChange,
   onScanNow,
   onBell,
   onToggleNotif,
+  onToggleTheme,
+  onInstall,
 }: HeaderProps) {
   const ringR = 10;
   const C = 2 * Math.PI * ringR;
@@ -169,6 +178,26 @@ export default function Header({
                 <path d="m6 9 6 6 6-6" />
               </svg>
             </div>
+
+            {canInstall && (
+              <button
+                onClick={onInstall}
+                aria-label="Installer l'application"
+                title="Installer Radar QA sur cet appareil"
+                className="grid h-9 w-9 place-items-center rounded-md border border-signal/50 bg-signal/10 text-signal transition-all hover:bg-signal/20 active:scale-95"
+              >
+                <IconInstall size={16} />
+              </button>
+            )}
+
+            <button
+              onClick={onToggleTheme}
+              aria-label={theme === "dark" ? "Passer en thème clair" : "Passer en thème sombre"}
+              title={theme === "dark" ? "Thème clair" : "Thème sombre"}
+              className="grid h-9 w-9 place-items-center rounded-md border border-edge bg-panel text-mut transition-all hover:border-edge2 hover:text-fg active:scale-95"
+            >
+              {theme === "dark" ? <IconSun size={16} /> : <IconMoon size={16} />}
+            </button>
 
             <button
               onClick={onToggleNotif}

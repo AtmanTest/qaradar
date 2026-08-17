@@ -28,6 +28,21 @@ interface RemotiveJob {
   description?: string;
 }
 
+interface AdzunaJob {
+  id: string;
+  title: string;
+  company?: { display_name?: string };
+  location?: { display_name?: string };
+  redirect_url?: string;
+  created?: string;
+  description?: string;
+  salary_min?: number;
+  salary_max?: number;
+  contract_type?: string;
+  contract_time?: string;
+  category?: { label?: string };
+}
+
 interface ArbeitnowJob {
   slug: string;
   title: string;
@@ -40,9 +55,11 @@ interface ArbeitnowJob {
   description?: string;
 }
 
-function parseSalaryK(s?: string): { min?: number; max?: number } {
+export function parseSalaryK(s?: string): { min?: number; max?: number } {
   if (!s) return {};
-  const nums = s.match(/\d+/g);
+  // neutralise les séparateurs de milliers (« 60 000 », « 60,000 », « 60 000 »)
+  const norm = s.replace(/(\d)[\s\u00a0\u202f,](?=\d{3}(\D|$))/g, "$1");
+  const nums = norm.match(/\d+/g);
   if (!nums || nums.length === 0) return {};
   const vals = nums.slice(0, 2).map(Number).filter((n) => n > 0);
   if (vals.length === 0) return {};
@@ -88,6 +105,61 @@ export async function fetchRemotive(): Promise<Job[]> {
   });
 }
 
+/**
+ * API Adzuna (clé développeur gratuite sur developer.adzuna.com).
+ * Interrogée en direct depuis le navigateur — les identifiants sont fournis
+ * par l'utilisateur et ne quittent jamais son navigateur.
+ */
+export async function fetchAdzuna(appId: string, appKey: string): Promise<Job[]> {
+  const params = new URLSearchParams({
+    app_id: appId,
+    app_key: appKey,
+    results_per_page: "12",
+    what: "QA engineer testeur logiciel",
+    where: "Paris",
+    sort_by: "date",
+    "content-type": "application/json",
+  });
+  const data = await getJSON<{ results?: AdzunaJob[] }>(
+    `https://api.adzuna.com/v1/api/jobs/fr/search/1?${params.toString()}`
+  );
+  return (data.results ?? []).slice(0, 12).map((j) => {
+    const title = stripHtml(j.title ?? "");
+    const company = j.company?.display_name ?? "Entreprise confidentielle";
+    const desc = stripHtml(j.description ?? "");
+    const tags = Array.from(
+      new Set(
+        [j.category?.label, j.contract_time, j.contract_type]
+          .filter((t): t is string => Boolean(t))
+          .map((t) => t.replace(/_/g, " "))
+      )
+    );
+    const minK = j.salary_min ? Math.round(j.salary_min / 1000) : undefined;
+    const maxK = j.salary_max ? Math.round(j.salary_max / 1000) : undefined;
+    return {
+      id: `az-${j.id}`,
+      title,
+      company,
+      location: (j.location?.display_name ?? "Paris").slice(0, 42),
+      workMode: /remote|télétravail|teletravail/i.test(`${title} ${desc}`)
+        ? ("Full remote" as const)
+        : ("Hybride" as const),
+      contract: j.contract_type === "contract" ? ("CDD" as const) : ("CDI" as const),
+      salaryMin: minK && minK > 10 && minK < 250 ? minK : undefined,
+      salaryMax: maxK && maxK > 10 && maxK < 250 ? maxK : undefined,
+      tags,
+      source: "adzuna" as const,
+      url: j.redirect_url ?? searchUrl(title, company),
+      publishedAt: j.created ? new Date(j.created).getTime() : Date.now(),
+      description: desc.slice(0, 900) || `Offre ${title} chez ${company}, publiée sur Adzuna.`,
+      seniority: /senior|lead|expert|principal/i.test(title)
+        ? "Senior · 8 ans et +"
+        : "Confirmé · 5 ans et +",
+      fromApi: true,
+    };
+  });
+}
+
 /** API publique gratuite (CORS ouvert) — marché européen, remote-friendly. */
 export async function fetchArbeitnow(): Promise<Job[]> {
   const data = await getJSON<{ data?: ArbeitnowJob[] }>(
@@ -95,10 +167,6 @@ export async function fetchArbeitnow(): Promise<Job[]> {
   );
   const qare = /qa|quality|test/i;
   const list = (data.data ?? [])
-    .filter(
-      (j) =>
-        qare.test(j.title) || (j.tags ?? []).some((t) => qare.test(t)) || j.remote
-    )
     .filter((j) => qare.test(j.title) || (j.tags ?? []).some((t) => qare.test(t)))
     .slice(0, 8);
   return list.map((j) => ({

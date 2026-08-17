@@ -1,6 +1,8 @@
-import type { Job } from "../types";
+import { useEffect, useRef } from "react";
+import type { Application, ApplicationStatus, Job } from "../types";
 import { annualLabel, formatPay, hueOf, initialsOf, timeAgo } from "../lib/utils";
-import { IconBookmark, IconExternal, IconEyeOff, IconPin, IconX, IconZap } from "./icons";
+import { APP_STATUSES } from "./Applications";
+import { IconBookmark, IconExternal, IconEyeOff, IconPin, IconSend, IconX, IconZap } from "./icons";
 
 interface JobDrawerProps {
   job: Job | null;
@@ -9,9 +11,12 @@ interface JobDrawerProps {
   isNew: boolean;
   isAlert: boolean;
   sourceName: string;
+  application?: Application;
   onClose: () => void;
   onSave: () => void;
   onHide: () => void;
+  onApply: () => void;
+  onAppStatus: (status: ApplicationStatus) => void;
 }
 
 export default function JobDrawer({
@@ -21,10 +26,21 @@ export default function JobDrawer({
   isNew,
   isAlert,
   sourceName,
+  application,
   onClose,
   onSave,
   onHide,
+  onApply,
+  onAppStatus,
 }: JobDrawerProps) {
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const jobId = job?.id;
+
+  // focus clavier à l'ouverture (accessibilité)
+  useEffect(() => {
+    if (jobId) closeRef.current?.focus();
+  }, [jobId]);
+
   if (!job) return null;
   const hue = hueOf(job.company);
 
@@ -41,6 +57,7 @@ export default function JobDrawer({
             Fiche offre · {sourceName}
           </div>
           <button
+            ref={closeRef}
             onClick={onClose}
             aria-label="Fermer"
             className="grid h-8 w-8 place-items-center rounded-md border border-edge text-mut transition-all hover:border-edge2 hover:text-fg active:scale-95"
@@ -124,6 +141,46 @@ export default function JobDrawer({
                 <span className="text-xs text-dim">Aucun tag fourni par la source.</span>
               )}
             </div>
+          </div>
+
+          {/* suivi de candidature */}
+          <div className="mt-5 rounded-lg border border-edge bg-panel2/40 p-4">
+            <div className="mb-2.5 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-dim">
+              <IconSend size={12} />
+              Suivi candidature
+            </div>
+            {application ? (
+              <>
+                <div className="flex items-center gap-1.5">
+                  {APP_STATUSES.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => onAppStatus(s.id)}
+                      aria-pressed={application.status === s.id}
+                      className={`h-7 flex-1 rounded-md border font-mono text-[10px] font-bold uppercase tracking-wide transition-all active:scale-95 ${
+                        application.status === s.id
+                          ? s.chip
+                          : "border-edge text-dim hover:border-edge2 hover:text-mut"
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2 text-[10.5px] text-dim">
+                  Dans le pipeline depuis {timeAgo(application.updatedAt)} — retrouvez-la dans
+                  l'onglet <span className="text-mut">Candidatures</span>.
+                </p>
+              </>
+            ) : (
+              <button
+                onClick={onApply}
+                className="flex h-8 w-full items-center justify-center gap-2 rounded-md border border-radarc/40 bg-radarc/10 text-xs font-medium text-radarc transition-all hover:bg-radarc/20 active:scale-[0.98]"
+              >
+                <IconSend size={13} />
+                Marquer comme postulé
+              </button>
+            )}
           </div>
         </div>
 
