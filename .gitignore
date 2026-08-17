@@ -1,5 +1,33 @@
+# Dépendances
 node_modules/
-.next/
+
+# Build
 dist/
-build/
+dist-ssr/
+
+# Variables d'environnement
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
 *.log
+npm-debug.log*
+
+# Cache & éditeurs
+.cache/
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Couverture de tests
+coverage/
+.next/
+build/
