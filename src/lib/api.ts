@@ -1,5 +1,6 @@
 import type { Job } from "../types";
 import { stripHtml } from "./utils";
+import { searchUrl } from "./searchUrl";
 
 const TIMEOUT = 6500;
 
@@ -70,12 +71,6 @@ export function parseSalaryK(s?: string): { min?: number; max?: number } {
   return { min: Math.min(a, b), max: Math.max(a, b) };
 }
 
-function searchUrl(title: string, company: string): string {
-  return `https://www.google.com/search?q=${encodeURIComponent(
-    `"${title}" ${company} job`
-  )}`;
-}
-
 /** API publique gratuite (CORS ouvert) — offres QA en télétravail. */
 export async function fetchRemotive(): Promise<Job[]> {
   const data = await getJSON<{ jobs?: RemotiveJob[] }>(
@@ -95,7 +90,7 @@ export async function fetchRemotive(): Promise<Job[]> {
       salaryMax: pay.max,
       tags: (j.tags ?? []).slice(0, 8),
       source: "remotive" as const,
-      url: j.url ?? searchUrl(j.title, j.company_name),
+      url: j.url ?? searchUrl("remotive", j.title, j.company_name),
       publishedAt: j.publication_date ? new Date(j.publication_date).getTime() : Date.now(),
       description: stripHtml(j.description ?? "").slice(0, 900) ||
         `Offre ${j.title} chez ${j.company_name}, publiée sur Remotive (full remote).`,
@@ -149,7 +144,7 @@ export async function fetchAdzuna(appId: string, appKey: string): Promise<Job[]>
       salaryMax: maxK && maxK > 10 && maxK < 250 ? maxK : undefined,
       tags,
       source: "adzuna" as const,
-      url: j.redirect_url ?? searchUrl(title, company),
+      url: j.redirect_url ?? searchUrl("adzuna", title, company),
       publishedAt: j.created ? new Date(j.created).getTime() : Date.now(),
       description: desc.slice(0, 900) || `Offre ${title} chez ${company}, publiée sur Adzuna.`,
       seniority: /senior|lead|expert|principal/i.test(title)
@@ -178,7 +173,7 @@ export async function fetchArbeitnow(): Promise<Job[]> {
     contract: "CDI" as const,
     tags: (j.tags ?? []).slice(0, 8),
     source: "arbeitnow" as const,
-    url: j.url ?? searchUrl(j.title, j.company_name),
+    url: j.url ?? searchUrl("arbeitnow", j.title, j.company_name),
     publishedAt: j.created_at ? new Date(j.created_at).getTime() : Date.now(),
     description: stripHtml(j.description ?? "").slice(0, 900) ||
       `Offre ${j.title} chez ${j.company_name}, publiée sur Arbeitnow.`,

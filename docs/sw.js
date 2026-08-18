@@ -1,6 +1,6 @@
 /* Radar QA — service worker : cache de l'enveloppe applicative (app shell).
    Les API d'offres restent systématiquement interrogées en réseau. */
-const VERSION = "radarqa-v2";
+const VERSION = "radarqa-v3-postuler-fix";
 const SHELL_CACHE = `${VERSION}-shell`;
 
 self.addEventListener("install", (event) => {

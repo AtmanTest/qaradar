@@ -1,4 +1,5 @@
 import type { Contract, Job, SourceId, SourceMeta, WorkMode } from "../types";
+import { searchUrl } from "../lib/searchUrl";
 
 const NOW = Date.now();
 const MIN = 60_000;
@@ -122,28 +123,6 @@ export function matchScore(job: Job): number {
 function desc(company: string, title: string, tags: string[]): string {
   const t = tags.slice(0, 3).join(", ") || "tests API et E2E";
   return `${company} renforce son pôle Qualité Logicielle et recrute un(e) ${title}. Rattaché(e) à la direction de l'ingénierie, vous définissez la stratégie de test du périmètre, automatisez les parcours critiques (${t}) et sécurisez les mises en production continues. Vous accompagnez les développeurs sur la qualité embarquée (shift-left), outillez les pipelines CI/CD et portez la voix du test lors des arbitrages produit. Environnement technique exigeant, forte culture de l'observabilité, revues de tests systématiques et budget formation/veille dédié.`;
-}
-
-/** URL de recherche native par source : le bouton « Postuler sur la source »
- *  doit renvoyer vers le job board concerné, pas vers Google. */
-function searchUrl(src: SourceId, title: string, company: string): string {
-  const q = encodeURIComponent(`${title} ${company}`);
-  switch (src) {
-    case "wttj":
-      return `https://www.welcometothejungle.com/fr/jobs?query=${q}`;
-    case "indeed":
-      return `https://fr.indeed.com/jobs?q=${q}`;
-    case "francetravail":
-      return `https://candidat.francetravail.fr/offres/recherche?motsCles=${q}`;
-    case "hellowork":
-      return `https://www.hellowork.com/fr-fr/emploi/recherche.html?k=${q}`;
-    case "linkedin":
-      return `https://www.linkedin.com/jobs/search/?keywords=${q}`;
-    default:
-      return `https://www.google.com/search?q=${encodeURIComponent(
-        `"${title}" ${company} offre emploi`
-      )}`;
-  }
 }
 
 interface MkOpts {
