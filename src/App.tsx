@@ -43,7 +43,21 @@ const LS = {
   prefs: "radarqa:prefs",
   applications: "radarqa:applications",
   apiKeys: "radarqa:apikeys",
+  schema: "radarqa:schema",
 };
+
+/** Version du modèle de données : bump pour invalider le cache navigateur
+ *  (les offres fictives persistées des anciennes versions). */
+const LS_SCHEMA = "api-only-1";
+
+function migrateStorage(): void {
+  if (localStorage.getItem(LS.schema) !== LS_SCHEMA) {
+    for (const key of Object.values(LS)) localStorage.removeItem(key);
+    localStorage.setItem(LS.schema, LS_SCHEMA);
+  }
+}
+
+migrateStorage();
 
 const ALL_SOURCES = SOURCES.map((s) => s.id);
 
