@@ -12,7 +12,7 @@ import type {
   TabId,
   ToastMsg,
 } from "./types";
-import { locationMatches, matchScore, RESERVE_POOL, SEED_JOBS, SOURCES } from "./data/jobs";
+import { locationMatches, matchScore, SOURCES } from "./data/jobs";
 import { fetchAdzuna, fetchArbeitnow, fetchRemotive } from "./lib/api";
 import {
   annualized,
@@ -70,18 +70,15 @@ const DEFAULT_PREFS: Prefs = {
 const DEFAULT_KEYS: ApiKeys = { adzunaAppId: "", adzunaAppKey: "" };
 
 const INITIAL_STATUS = Object.fromEntries(
-  SOURCES.map((s) => [s.id, s.kind === "api" ? "pending" : "scanning"])
+  SOURCES.map((s) => [s.id, s.kind === "api" ? "pending" : "offline"])
 ) as Record<SourceId, SourceStatus>;
 
 function initialJobs(): Job[] {
-  const stored = loadJSON<Job[] | null>(LS.jobs, null);
-  return stored && stored.length > 0 ? stored : SEED_JOBS;
+  return loadJSON<Job[] | null>(LS.jobs, null) ?? [];
 }
 
 function initialKnown(): string[] {
-  const stored = loadJSON<string[] | null>(LS.known, null);
-  if (stored) return stored;
-  return SEED_JOBS.filter((j) => Date.now() - j.publishedAt > 45 * 60_000).map((j) => j.id);
+  return loadJSON<string[] | null>(LS.known, null) ?? [];
 }
 
 const TABS: { id: TabId; label: string }[] = [
@@ -136,7 +133,6 @@ export default function App() {
   const scanningRef = useRef(false);
   const bootedRef = useRef(false);
   const roundRef = useRef(0);
-  const poolRef = useRef(0);
   const toastSeq = useRef(0);
   const knownRef = useRef(knownIds);
   const hiddenRef = useRef(hiddenIds);
@@ -206,20 +202,7 @@ export default function App() {
 
       await delay(initial ? 1200 : 750 + Math.random() * 650);
 
-      // 1) arrivages du flux national (effet temps réel entre deux scans)
-      const injected: Job[] = [];
-      const take = initial ? 0 : Math.random() < 0.35 ? 2 : 1;
-      for (let i = 0; i < take; i++) {
-        const base = RESERVE_POOL[poolRef.current % RESERVE_POOL.length];
-        poolRef.current += 1;
-        injected.push({
-          ...base,
-          id: `${base.id}-r${round}-${i}`,
-          publishedAt: Date.now() - Math.floor((1 + Math.random() * 30) * 60_000),
-        });
-      }
-
-      // 2) APIs publiques interrogées en direct depuis le navigateur
+      // 1) APIs publiques interrogées en direct depuis le navigateur
       const keys = keysRef.current;
       const adzunaReady = Boolean(keys.adzunaAppId && keys.adzunaAppKey);
       const calls: [SourceId, Promise<Job[]>][] = [
@@ -243,18 +226,18 @@ export default function App() {
 
       setStatus((s) => ({
         ...s,
-        wttj: "online",
-        indeed: "online",
-        francetravail: "online",
-        hellowork: "online",
-        linkedin: "online",
+        wttj: "offline",
+        indeed: "offline",
+        francetravail: "offline",
+        hellowork: "offline",
+        linkedin: "offline",
         ...apiStatus,
       }));
 
       const known = new Set(knownRef.current);
       const hiddenSet = new Set(hiddenRef.current);
       const seen = new Set<string>();
-      const fresh = [...injected, ...apiJobs].filter((j) => {
+      const fresh = [...apiJobs].filter((j) => {
         if (known.has(j.id) || hiddenSet.has(j.id) || seen.has(j.id)) return false;
         seen.add(j.id);
         return true;
@@ -280,13 +263,11 @@ export default function App() {
       }
 
       if (initial) {
-        const recentSeed = SEED_JOBS.filter(
-          (j) => Date.now() - j.publishedAt <= 45 * 60_000
-        ).map((j) => j.id);
-        setNewIds(recentSeed.filter((id) => !hiddenRef.current.includes(id)));
+        const freshCount = jobsRef.current.length + fresh.length;
+        setNewIds(fresh.filter((j) => !hiddenRef.current.includes(j.id)).map((j) => j.id));
         pushToast(
           "info",
-          `Veille initialisée — ${jobsRef.current.length + fresh.length} offres rapatriées, ${recentSeed.length} nouveauté${recentSeed.length > 1 ? "s" : ""}`
+          `Veille initialisée — ${freshCount} offres rapatriées depuis les APIs`
         );
       }
 
